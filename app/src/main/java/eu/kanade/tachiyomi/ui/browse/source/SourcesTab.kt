@@ -158,7 +158,7 @@ fun Screen.sourcesTab(
                         OutlinedTextField(
                             value = subscriptionUrl,
                             onValueChange = { subscriptionUrl = it },
-                            label = { Text("HTTPS JSON URL") },
+                            label = { Text("HTTP(S) JSON URL") },
                             singleLine = true,
                         )
                     },
