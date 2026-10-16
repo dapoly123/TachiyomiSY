@@ -29,6 +29,22 @@ RULE = {
     "ruleChapterUrl": "a@href",
     "ruleBookContent": "img.page@src",
 }
+JSON_RULE = {
+    **RULE,
+    "bookSourceName": "JSONPath Source Smoke Fixture",
+    "ruleSearchUrl": BASE + "/json/search?q={{key}}",
+    "ruleSearchList": "$.data.data||$.data",
+    "ruleSearchName": "$.comic_name",
+    "ruleSearchNoteUrl": BASE + "/comic/{{$.comic_id}}",
+    "ruleSearchCoverUrl": "$.cover",
+}
+LEGACY_RULE = {
+    **RULE,
+    "bookSourceName": "Legacy Selector Smoke Fixture",
+    "ruleSearchList": "class.entry@tag.a",
+    "ruleSearchName": "tag.h2@text",
+    "ruleSearchNoteUrl": "href",
+}
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -36,6 +52,19 @@ class Handler(BaseHTTPRequestHandler):
         route = urlsplit(self.path)
         if route.path == "/source.json":
             return self.reply(json.dumps(RULE, ensure_ascii=False).encode(), "application/json")
+        if route.path == "/source-json.json":
+            return self.reply(json.dumps(JSON_RULE, ensure_ascii=False).encode(), "application/json")
+        if route.path == "/source-legacy.json":
+            return self.reply(json.dumps(LEGACY_RULE, ensure_ascii=False).encode(), "application/json")
+        if route.path == "/json/search":
+            query = parse_qs(route.query).get("q", ["sample"])[0]
+            return self.reply(json.dumps({
+                "data": {"data": [{
+                    "comic_name": "JSONPath Manga: " + query,
+                    "comic_id": 1,
+                    "cover": "/images/cover.png",
+                }]},
+            }).encode(), "application/json")
         if route.path == "/search":
             query = parse_qs(route.query).get("q", ["sample"])[0]
             return self.reply(f"""
