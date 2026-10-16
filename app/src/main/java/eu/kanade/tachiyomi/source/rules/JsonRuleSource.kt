@@ -31,7 +31,7 @@ class JsonRuleSource(private val rule: JSONObject) : HttpSource() {
     override val supportsLatest = false
     override val id: Long = run {
         val digest = MessageDigest.getInstance("SHA-256")
-            .digest(("tachiyomi-json-rule:" + baseUrl).toByteArray())
+            .digest(("tachiyomi-json-rule:" + baseUrl + ":" + name + ":" + lang).toByteArray())
         var result = 0L
         for (i in 0 until 8) result = (result shl 8) or (digest[i].toLong() and 255L)
         result or Long.MIN_VALUE
