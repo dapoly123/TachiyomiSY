@@ -158,13 +158,7 @@ class JsonRuleSource(private val rule: JSONObject) : HttpSource() {
     private fun jsonList(body: String, sourceUrl: String, prefix: String): List<SManga> {
         val listRule = field(prefix + "List")
         val root = JsonPathSubset.decode(body)
-        val records = JsonPathSubset.select(root, listRule).flatMap { node ->
-            if (node is JSONArray) {
-                (0 until node.length()).mapNotNull { node.opt(it) }
-            } else {
-                listOf(node)
-            }
-        }
+        val records = flattenJson(JsonPathSubset.select(root, listRule))
         return records.mapNotNull { item ->
             val title = JsonPathSubset.text(item, field(prefix + "Name"))
             val link = JsonPathSubset.text(item, field(prefix + "NoteUrl"))
@@ -183,9 +177,21 @@ class JsonRuleSource(private val rule: JSONObject) : HttpSource() {
         }
     }
 
+    private fun flattenJson(values: List<Any>): List<Any> =
+        values.flatMap { node ->
+            if (node is JSONArray) {
+                (0 until node.length()).mapNotNull { node.opt(it) }
+            } else {
+                listOf(node)
+            }
+        }
+
+    private fun isJsonRule(expression: String): Boolean =
+        expression.trim().startsWith("$") || expression.trim().startsWith("-$")
+
     private suspend fun cataloguePage(address: String, prefix: String): MangasPage {
         val listRule = field(prefix + "List").trim()
-        val jsonMode = listRule.startsWith("$") || listRule.startsWith("-$")
+        val jsonMode = isJsonRule(listRule)
         val items = if (jsonMode) {
             val (body, finalUrl) = fetch(address)
             jsonList(body, finalUrl, prefix)
@@ -232,6 +238,44 @@ class JsonRuleSource(private val rule: JSONObject) : HttpSource() {
         fetchChapters: Boolean,
     ): SMangaUpdate {
         if (!fetchDetails && !fetchChapters) return SMangaUpdate(manga, chapters)
+        val chapterListRule = field("ruleChapterList")
+        val jsonMode = isJsonRule(chapterListRule) || isJsonRule(field("ruleBookName"))
+        if (jsonMode) {
+            val (body, finalUrl) = fetch(manga.url)
+            val root = JsonPathSubset.decode(body)
+            val updated = manga.copy()
+            if (fetchDetails) {
+                field("ruleBookName").takeIf { it.isNotBlank() }?.let {
+                    updated.title = JsonPathSubset.text(root, it).ifBlank { manga.title }
+                }
+                field("ruleBookIntro").takeIf { it.isNotBlank() }?.let { updated.description = JsonPathSubset.text(root, it) }
+                field("ruleBookAuthor").takeIf { it.isNotBlank() }?.let { updated.author = JsonPathSubset.text(root, it) }
+                field("ruleBookCoverUrl").takeIf { it.isNotBlank() }?.let {
+                    updated.thumbnail_url = JsonPathSubset.text(root, it).takeIf { cover -> cover.isNotBlank() }
+                        ?.let { cover -> resolveUrl(cover, finalUrl) }
+                }
+                updated.initialized = true
+            }
+            val parsed = if (fetchChapters && chapterListRule.isNotBlank()) {
+                val urlRule = field("ruleChapterUrl").ifBlank { field("ruleContentUrl") }
+                require(urlRule.isNotBlank()) { "JSON source has no chapter URL template" }
+                flattenJson(JsonPathSubset.select(root, chapterListRule)).mapNotNull { item ->
+                    val chapterName = JsonPathSubset.text(item, field("ruleChapterName"))
+                    val address = JsonPathSubset.text(item, urlRule)
+                    if (chapterName.isBlank() || address.isBlank()) {
+                        null
+                    } else {
+                        SChapter.create().apply {
+                            name = chapterName
+                            url = resolveUrl(address, finalUrl)
+                        }
+                    }
+                }
+            } else {
+                chapters
+            }
+            return SMangaUpdate(updated, parsed)
+        }
         val doc = document(manga.url)
         val updated = manga.copy()
         if (fetchDetails) {
@@ -270,9 +314,17 @@ class JsonRuleSource(private val rule: JSONObject) : HttpSource() {
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val doc = document(chapter.url)
         val rule = field("ruleBookContent").ifBlank { field("ruleContent") }
         require(rule.isNotBlank()) { "Source has no image extraction rule" }
+        if (isJsonRule(rule)) {
+            val (body, finalUrl) = fetch(chapter.url)
+            val records = flattenJson(JsonPathSubset.select(JsonPathSubset.decode(body), rule))
+            return records.mapNotNull { node ->
+                val address = if (node is JSONObject) node.optString("url") else node.toString()
+                address.takeIf { it.isNotBlank() && it != "null" }?.let { resolveUrl(it, finalUrl) }
+            }.distinct().mapIndexed { index, address -> Page(index, address, address) }
+        }
+        val doc = document(chapter.url)
         val attr = rule.substringAfter('@', "src").trim()
         return select(doc, rule).mapNotNull { node ->
             photoUrl(node, attr).takeIf { it.isNotBlank() }
