@@ -56,6 +56,7 @@ Example:
 
 - Imported plain JSON, a PipiMiao `ppcat://ruleLink` directly, and PipiMiao backup JSON.
 - Searched `test` successfully using standard CSS (`Smoke Manga: test`), legacy PipiMiao selectors (`Smoke Manga: test`), and JSONPath API (`JSONPath Manga: test`).
+- The JSON API fixture also provides JSON manga details, nested JSON chapter records, templated chapter URLs, and JSON image URL arrays. Android API 29 emulator loaded the JSON details, two chapters, and both uniquely named `json-page-1.png`/`json-page-2.png` images (HTTP 200).
 - Verified the search-to-detail flow, 2 chapters, 2 reader images (HTTP 200), JSON subscription refresh, removing rules, retaining other rules on process restart, and automatic language enablement.
 - Compiled with `./gradlew :app:assembleDebug --offline` on Offical using JDK 17, Gradle 9.7, Android SDK 37.0. `./gradlew :app:testDebugUnitTest` passed, including the new JSONPath regression tests, after adding the JVM `org.json` test implementation. `./gradlew :app:spotlessCheck --offline` also passed after applying the project formatter.
 - Treat imported rules as untrusted network configuration, especially if they target private/local addresses. No imported JavaScript is executed.
