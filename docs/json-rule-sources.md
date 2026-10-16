@@ -57,6 +57,6 @@ Example:
 - Imported plain JSON, a PipiMiao `ppcat://ruleLink` directly, and PipiMiao backup JSON.
 - Searched `test` successfully using standard CSS (`Smoke Manga: test`), legacy PipiMiao selectors (`Smoke Manga: test`), and JSONPath API (`JSONPath Manga: test`).
 - Verified the search-to-detail flow, 2 chapters, 2 reader images (HTTP 200), JSON subscription refresh, removing rules, retaining other rules on process restart, and automatic language enablement.
-- Compiled with `./gradlew :app:assembleDebug --offline` on Offical using JDK 17, Gradle 9.7, Android SDK 37.0. Existing test/lint suites need uncached dependencies for Kotest/MockK/ktlint; those checks have not passed.
+- Compiled with `./gradlew :app:assembleDebug --offline` on Offical using JDK 17, Gradle 9.7, Android SDK 37.0. `./gradlew :app:testDebugUnitTest` also passed, including the new JSONPath regression tests, after adding the JVM `org.json` test implementation. Project-wide Spotless remains a separate check.
 - Treat imported rules as untrusted network configuration, especially if they target private/local addresses. No imported JavaScript is executed.
 - Automated compilation and device tests are required before using a built APK.
