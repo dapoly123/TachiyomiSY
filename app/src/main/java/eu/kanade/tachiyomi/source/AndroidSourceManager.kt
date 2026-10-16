@@ -4,8 +4,6 @@ import android.content.Context
 import eu.kanade.domain.source.service.SourcePreferences
 import eu.kanade.tachiyomi.data.download.DownloadManager
 import eu.kanade.tachiyomi.extension.ExtensionManager
-import eu.kanade.tachiyomi.source.rules.JsonRuleRegistry
-import eu.kanade.tachiyomi.source.rules.JsonRuleSource
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.source.online.all.EHentai
 import eu.kanade.tachiyomi.source.online.all.Lanraragi
@@ -16,6 +14,8 @@ import eu.kanade.tachiyomi.source.online.english.EightMuses
 import eu.kanade.tachiyomi.source.online.english.HBrowse
 import eu.kanade.tachiyomi.source.online.english.Pururin
 import eu.kanade.tachiyomi.source.online.english.Tsumino
+import eu.kanade.tachiyomi.source.rules.JsonRuleRegistry
+import eu.kanade.tachiyomi.source.rules.JsonRuleSource
 import exh.log.xLogD
 import exh.source.BlacklistedSources
 import exh.source.DelegatedHttpSource
