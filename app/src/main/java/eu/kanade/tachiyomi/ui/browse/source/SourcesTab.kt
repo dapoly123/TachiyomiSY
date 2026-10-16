@@ -5,6 +5,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.FileOpen
+import androidx.compose.material.icons.outlined.ContentPaste
 import androidx.compose.material.icons.outlined.FilterList
 import androidx.compose.material.icons.outlined.ListAlt
 import androidx.compose.material.icons.outlined.Link
@@ -66,6 +67,8 @@ fun Screen.sourcesTab(
     var manageRules by remember { mutableStateOf(false) }
     var subscriptionDialog by remember { mutableStateOf(false) }
     var subscriptionUrl by remember { mutableStateOf("") }
+    var pipiLinkDialog by remember { mutableStateOf(false) }
+    var pipiLink by remember { mutableStateOf("") }
     val importLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) {
             scope.launch {
@@ -84,7 +87,7 @@ fun Screen.sourcesTab(
                             output.toString()
                         } ?: error("Could not open JSON document")
                     }
-                    ruleRegistry.importJson(text)
+                    withContext(Dispatchers.IO) { ruleRegistry.importJson(text) }
                 }
                 Toast.makeText(
                     context,
@@ -130,6 +133,11 @@ fun Screen.sourcesTab(
                 onClick = { subscriptionDialog = true },
             ),
             AppBar.Action(
+                title = "Import PipiMiao share link",
+                icon = Icons.Outlined.ContentPaste,
+                onClick = { pipiLinkDialog = true },
+            ),
+            AppBar.Action(
                 title = stringResource(MR.strings.action_global_search),
                 icon = Icons.Outlined.TravelExplore,
                 onClick = { navigator.push(GlobalSearchScreen(smartSearchConfig?.origTitle ?: "")) },
@@ -150,6 +158,43 @@ fun Screen.sourcesTab(
         },
         // SY <--
         content = { contentPadding, snackbarHostState ->
+            if (pipiLinkDialog) {
+                AlertDialog(
+                    onDismissRequest = { pipiLinkDialog = false },
+                    title = { Text("Import PipiMiao source") },
+                    text = {
+                        OutlinedTextField(
+                            value = pipiLink,
+                            onValueChange = { pipiLink = it },
+                            label = { Text("ppcat://ruleLink?data=...") },
+                            minLines = 2,
+                            maxLines = 5,
+                        )
+                    },
+                    confirmButton = {
+                        TextButton(onClick = {
+                            val link = pipiLink.trim()
+                            pipiLinkDialog = false
+                            scope.launch {
+                                val result = runCatching {
+                                    withContext(Dispatchers.IO) { ruleRegistry.importJson(link) }
+                                }
+                                Toast.makeText(
+                                    context,
+                                    result.fold(
+                                        onSuccess = { "Imported $it PipiMiao source" },
+                                        onFailure = { "PipiMiao import failed: ${it.message}" },
+                                    ),
+                                    Toast.LENGTH_LONG,
+                                ).show()
+                            }
+                        }) { Text("Import") }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { pipiLinkDialog = false }) { Text("Cancel") }
+                    },
+                )
+            }
             if (subscriptionDialog) {
                 AlertDialog(
                     onDismissRequest = { subscriptionDialog = false },
