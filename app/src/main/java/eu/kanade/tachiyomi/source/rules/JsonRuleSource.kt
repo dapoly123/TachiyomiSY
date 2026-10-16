@@ -128,12 +128,15 @@ class JsonRuleSource(private val rule: JSONObject) : HttpSource() {
         val doc = document(chapter.url)
         val css = selector("ruleBookContent").ifBlank { selector("ruleContent") }
         require(css.isNotBlank()) { "Source does not define page extraction rules" }
-        val elements = elements(doc, css)
-        return elements.mapNotNull { element ->
-            val candidate = extract(element, if (css.contains("@")) css.substringAfterLast(' ').let {
-                if (it.contains('@')) it else "img@src"
-            } else "img@src")
-            candidate.takeIf { it.isNotBlank() }?.let(::absolute)
+        val nodes = elements(doc, css)
+        val attribute = css.substringAfter("@", "src")
+        return nodes.mapNotNull { node ->
+            val value = when (attribute) {
+                "text" -> node.text()
+                "src", "href" -> node.absUrl(attribute).ifBlank { node.attr(attribute) }
+                else -> node.attr(attribute)
+            }
+            value.takeIf { it.isNotBlank() }?.let(::absolute)
         }.mapIndexed { index, url -> Page(index, url, url) }
     }
 }
