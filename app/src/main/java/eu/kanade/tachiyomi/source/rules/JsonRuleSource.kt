@@ -50,14 +50,14 @@ class JsonRuleSource(private val rule: JSONObject) : HttpSource() {
 
     private fun elements(root: Element, expression: String): List<Element> {
         require(!expression.startsWith("@js:")) { "Imported JavaScript rules are unsupported" }
-        val css = expression.substringBefore("@").trim()
+        val css = expression.substringBefore("@").trim().takeUnless { it in setOf("text", "href", "src", "html") } ?: ""
         return if (css.isBlank()) listOf(root) else root.select(css)
     }
 
     private fun extract(root: Element, expression: String): String {
         require(!expression.startsWith("@js:")) { "Imported JavaScript rules are unsupported" }
         val element = elements(root, expression).firstOrNull() ?: return ""
-        val attribute = expression.substringAfter("@", "").trim()
+        val attribute = expression.substringAfter("@", expression).trim()
         return when (attribute) {
             "", "text" -> element.text()
             "html" -> element.html()
