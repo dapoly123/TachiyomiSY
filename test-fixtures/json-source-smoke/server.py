@@ -51,9 +51,37 @@ LEGACY_RULE = {
     "ruleSearchName": "tag.h2@text",
     "ruleSearchNoteUrl": "href",
 }
+POST_RULE = {
+    **RULE,
+    "bookSourceName": "POST JSON Source Smoke Fixture",
+    "ruleSearchUrl": BASE + "/post/search@k=searchKey",
+    "ruleSearchList": "$.data[*]",
+    "ruleSearchName": ".name",
+    "ruleSearchNoteUrl": BASE + "/comic/{{$.id}}",
+    "ruleSearchCoverUrl": "$.imgurl",
+}
 
 
 class Handler(BaseHTTPRequestHandler):
+    def do_POST(self):
+        route = urlsplit(self.path)
+        if route.path != "/post/search":
+            return self.reply(b"Not found", "text/plain", 404)
+        length = int(self.headers.get("Content-Length", "0"))
+        if length > 2000:
+            return self.reply(b"Too large", "text/plain", 413)
+        query = parse_qs(self.rfile.read(length).decode("utf-8")).get("k", [""])[0]
+        if not query:
+            return self.reply(b"Missing query", "text/plain", 400)
+        return self.reply(json.dumps({
+            "code": "200",
+            "data": [{
+                "id": "1",
+                "name": "POST Result: " + query,
+                "imgurl": BASE + "/images/cover.png",
+            }],
+        }, ensure_ascii=False).encode(), "application/json")
+
     def do_GET(self):
         route = urlsplit(self.path)
         if route.path == "/source.json":
@@ -62,6 +90,8 @@ class Handler(BaseHTTPRequestHandler):
             return self.reply(json.dumps(JSON_RULE, ensure_ascii=False).encode(), "application/json")
         if route.path == "/source-legacy.json":
             return self.reply(json.dumps(LEGACY_RULE, ensure_ascii=False).encode(), "application/json")
+        if route.path == "/source-post.json":
+            return self.reply(json.dumps(POST_RULE, ensure_ascii=False).encode(), "application/json")
         if route.path == "/json/search":
             query = parse_qs(route.query).get("q", ["sample"])[0]
             return self.reply(json.dumps({
