@@ -294,6 +294,8 @@ dependencies {
 
     // Tests
     testImplementation(libs.bundles.test)
+    // JVM unit tests need a real org.json implementation, not Android SDK's stubs.
+    testImplementation("org.json:json:20240303")
     testRuntimeOnly(libs.junit.platform.launcher)
 
     // For detecting memory leaks; see https://square.github.io/leakcanary/
