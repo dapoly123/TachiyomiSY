@@ -13,7 +13,8 @@ class JsonPathSubsetTest {
                 {"comic_name":"Comic Two","comic_id":2}
             ]
         }
-    }""".trimIndent()
+    }
+    """.trimIndent()
 
     @Test
     fun `nested arrays and alternate paths`() {
