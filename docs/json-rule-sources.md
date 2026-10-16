@@ -19,7 +19,7 @@ The import is persisted in app-local preferences and the source list refreshes w
 - `ruleSearchUrl`, `ruleSearchList`, `ruleSearchName`, `ruleSearchCoverUrl`, `ruleSearchNoteUrl`
 - `ruleBookName`, `ruleBookIntro`, `ruleBookAuthor`, `ruleBookCoverUrl`, `ruleChapterList`, `ruleChapterName`, `ruleChapterUrl`, `ruleBookContent`
 
-Rules use JSoup CSS selectors, and `@href`, `@src`, `@text` suffixes or `text`, `href`, `src` shorthand. Query variables: `{{key}}`, `{{searchKey}}`, `{{keyword}}`, `{{page}}`, `{page}`. Links and images resolve relative to the page they came from.
+Rules use JSoup CSS selectors, and `@href`, `@src`, `@text` suffixes or `text`, `href`, `src` shorthand. PipiMiao-style `tag.a`, `class.manList@tag.ul@tag.li`, and `||` fallbacks are also supported for HTML. JSON APIs support a non-executable JSONPath subset: `$.foo.bar`, `$.items[*]`, `$.[*]`, `$.items[0]`, `$.*`, and `||` fallbacks, including list arrays and simple URL interpolation like `{{$.id}}`. Query variables: `{{key}}`, `{{searchKey}}`, `{{keyword}}`, `{{page}}`, `{{page-1}}`, `{page}`. Links and images resolve relative to the page they came from.
 
 Example:
 
@@ -50,5 +50,13 @@ Example:
 - PipiMiao direct links and JSON backups are decoded; incompatible website-rule expressions remain unsupported.
 - There is currently no automatic interval-based refresh of subscriptions, only manual refresh.
 - No built-in pagination detection yet (each query returns the current page).
+- JSONPath subset intentionally excludes predicates/filters, recursive descent, JavaScript post-processing, `@put` stateful transforms and script-generated chapter URLs. Importing rules containing these features does not make them fully usable.
+
+### Emulator regression evidence (API 29)
+
+- Imported plain JSON, a PipiMiao `ppcat://ruleLink` directly, and PipiMiao backup JSON.
+- Searched `test` successfully using standard CSS (`Smoke Manga: test`), legacy PipiMiao selectors (`Smoke Manga: test`), and JSONPath API (`JSONPath Manga: test`).
+- Verified the search-to-detail flow, 2 chapters, 2 reader images (HTTP 200), JSON subscription refresh, removing rules, retaining other rules on process restart, and automatic language enablement.
+- Compiled with `./gradlew :app:assembleDebug --offline` on Offical using JDK 17, Gradle 9.7, Android SDK 37.0. Existing test/lint suites need uncached dependencies for Kotest/MockK/ktlint; those checks have not passed.
 - Treat imported rules as untrusted network configuration, especially if they target private/local addresses. No imported JavaScript is executed.
 - Automated compilation and device tests are required before using a built APK.
