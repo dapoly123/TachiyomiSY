@@ -7,13 +7,16 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.FileOpen
 import androidx.compose.material.icons.outlined.FilterList
 import androidx.compose.material.icons.outlined.ListAlt
+import androidx.compose.material.icons.outlined.Link
 import androidx.compose.material.icons.outlined.TravelExplore
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -59,7 +62,10 @@ fun Screen.sourcesTab(
     val scope = rememberCoroutineScope()
     val ruleRegistry = remember(context) { JsonRuleRegistry.get(context) }
     val installedRules by ruleRegistry.rules.collectAsStateWithLifecycle()
+    val subscriptions by ruleRegistry.subscriptions.collectAsStateWithLifecycle()
     var manageRules by remember { mutableStateOf(false) }
+    var subscriptionDialog by remember { mutableStateOf(false) }
+    var subscriptionUrl by remember { mutableStateOf("") }
     val importLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) {
             scope.launch {
@@ -119,6 +125,11 @@ fun Screen.sourcesTab(
                 onClick = { manageRules = true },
             ),
             AppBar.Action(
+                title = "Subscribe to JSON rule URL",
+                icon = Icons.Outlined.Link,
+                onClick = { subscriptionDialog = true },
+            ),
+            AppBar.Action(
                 title = stringResource(MR.strings.action_global_search),
                 icon = Icons.Outlined.TravelExplore,
                 onClick = { navigator.push(GlobalSearchScreen(smartSearchConfig?.origTitle ?: "")) },
@@ -139,15 +150,59 @@ fun Screen.sourcesTab(
         },
         // SY <--
         content = { contentPadding, snackbarHostState ->
+            if (subscriptionDialog) {
+                AlertDialog(
+                    onDismissRequest = { subscriptionDialog = false },
+                    title = { Text("Subscribe to JSON rules") },
+                    text = {
+                        OutlinedTextField(
+                            value = subscriptionUrl,
+                            onValueChange = { subscriptionUrl = it },
+                            label = { Text("HTTPS JSON URL") },
+                            singleLine = true,
+                        )
+                    },
+                    confirmButton = {
+                        TextButton(onClick = {
+                            val address = subscriptionUrl.trim()
+                            subscriptionDialog = false
+                            scope.launch {
+                                val result = runCatching { ruleRegistry.importSubscription(address) }
+                                Toast.makeText(
+                                    context,
+                                    result.fold(
+                                        onSuccess = { "Subscribed: $it sources" },
+                                        onFailure = { "Subscription failed: ${it.message}" },
+                                    ),
+                                    Toast.LENGTH_LONG,
+                                ).show()
+                            }
+                        }) { Text("Subscribe") }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { subscriptionDialog = false }) { Text("Cancel") }
+                    },
+                )
+            }
             if (manageRules) {
                 AlertDialog(
                     onDismissRequest = { manageRules = false },
                     title = { Text("Imported JSON sources") },
                     text = {
-                        if (installedRules.isEmpty()) {
+                        if (installedRules.isEmpty() && subscriptions.isEmpty()) {
                             Text("No JSON sources imported yet.")
                         } else {
                             LazyColumn(modifier = Modifier.heightIn(max = 400.dp)) {
+                                if (subscriptions.isNotEmpty()) {
+                                    item { Text("HTTPS subscriptions") }
+                                    items(subscriptions) { address ->
+                                        Text(address)
+                                        TextButton(onClick = { ruleRegistry.removeSubscription(address) }) {
+                                            Text("Unsubscribe")
+                                        }
+                                    }
+                                    item { Text("Installed rules") }
+                                }
                                 items(installedRules) { rule ->
                                     val sourceName = rule.optString("bookSourceName")
                                         .ifBlank { rule.optString("name") }
@@ -168,7 +223,20 @@ fun Screen.sourcesTab(
                         }) { Text("Import JSON") }
                     },
                     dismissButton = {
-                        TextButton(onClick = { manageRules = false }) { Text("Close") }
+                        Row {
+                            TextButton(onClick = {
+                                scope.launch {
+                                    val result = ruleRegistry.refreshSubscriptions()
+                                    val failed = result.count { it.value.isFailure }
+                                    Toast.makeText(
+                                        context,
+                                        "Refreshed ${result.size - failed}/${result.size} subscriptions",
+                                        Toast.LENGTH_LONG,
+                                    ).show()
+                                }
+                            }) { Text("Refresh URLs") }
+                            TextButton(onClick = { manageRules = false }) { Text("Close") }
+                        }
                     },
                 )
             }
