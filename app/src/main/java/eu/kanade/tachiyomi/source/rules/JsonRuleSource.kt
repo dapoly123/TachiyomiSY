@@ -9,6 +9,7 @@ import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import eu.kanade.tachiyomi.source.online.HttpSource
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import okhttp3.FormBody
 import okhttp3.Headers
 import okhttp3.Request
 import org.json.JSONArray
@@ -63,8 +64,15 @@ class JsonRuleSource(private val rule: JSONObject) : HttpSource() {
     override fun getMangaUrl(manga: SManga): String = resolveUrl(manga.url)
     override fun getChapterUrl(chapter: SChapter): String = resolveUrl(chapter.url)
 
-    private suspend fun fetch(address: String): Pair<String, String> = withContext(Dispatchers.IO) {
-        client.newCall(Request.Builder().url(resolveUrl(address)).headers(headers).build()).execute().use { response ->
+    private suspend fun fetch(address: String, form: Map<String, String> = emptyMap()): Pair<String, String> = withContext(Dispatchers.IO) {
+        val request = Request.Builder().url(resolveUrl(address)).headers(headers)
+        if (form.isNotEmpty()) {
+            val body = FormBody.Builder().apply {
+                form.forEach { (name, value) -> add(name, value) }
+            }.build()
+            request.post(body)
+        }
+        client.newCall(request.build()).execute().use { response ->
             check(response.isSuccessful) { "HTTP ${response.code}: ${response.request.url}" }
             val body = response.body?.string() ?: error("Empty document response")
             body to response.request.url.toString()
@@ -76,7 +84,7 @@ class JsonRuleSource(private val rule: JSONObject) : HttpSource() {
         return Jsoup.parse(body, finalUrl)
     }
 
-    private val attributes = setOf("text", "html", "href", "src", "style", "title", "data-src", "data-original", "srcset")
+    private val attributes = setOf("text", "html", "href", "src", "style", "title", "alt", "content", "data-src", "data-original", "srcset")
 
     /** Supports plain CSS plus PipiMiao's class.foo@tag.ul@tag.li shorthand. */
     private fun selectorAndAttribute(expression: String): Pair<String, String> {
@@ -189,14 +197,23 @@ class JsonRuleSource(private val rule: JSONObject) : HttpSource() {
     private fun isJsonRule(expression: String): Boolean =
         expression.trim().startsWith("$") || expression.trim().startsWith("-$")
 
-    private suspend fun cataloguePage(address: String, prefix: String): MangasPage {
+    private suspend fun cataloguePage(
+        address: String,
+        prefix: String,
+        form: Map<String, String> = emptyMap(),
+    ): MangasPage {
         val listRule = field(prefix + "List").trim()
         val jsonMode = isJsonRule(listRule)
         val items = if (jsonMode) {
-            val (body, finalUrl) = fetch(address)
+            val (body, finalUrl) = fetch(address, form)
             jsonList(body, finalUrl, prefix)
         } else {
-            list(document(address), prefix)
+            if (form.isEmpty()) {
+                list(document(address), prefix)
+            } else {
+                val (body, finalUrl) = fetch(address, form)
+                list(Jsoup.parse(body, finalUrl), prefix)
+            }
         }
         return MangasPage(items, false)
     }
@@ -226,7 +243,26 @@ class JsonRuleSource(private val rule: JSONObject) : HttpSource() {
     override suspend fun getSearchManga(page: Int, query: String, filters: FilterList): MangasPage {
         val template = field("ruleSearchUrl")
         require(template.isNotBlank()) { "Source has no ruleSearchUrl" }
-        return cataloguePage(prepareUrl(template, query, page), "ruleSearch")
+        // Compatible with declarative PipiMiao-style form rules:
+        // http://example.org/s@k=searchKey  -> POST /s with form k=<query>.
+        val separator = template.lastIndexOf('@')
+        val suffix = template.substring(separator + 1)
+        val formRule = if (separator > 0 && suffix.matches(Regex("[A-Za-z_][A-Za-z0-9_-]*=[A-Za-z0-9_{}+&=-]+"))) {
+            suffix
+        } else {
+            null
+        }
+        val urlTemplate = if (formRule != null) template.substring(0, separator) else template
+        val form = formRule?.split('&')?.associate { pair ->
+            val name = pair.substringBefore('=')
+            val variable = pair.substringAfter('=')
+            name to when (variable) {
+                "searchKey", "key", "{{key}}", "{{searchKey}}" -> query
+                "searchPage", "{{page}}" -> page.toString()
+                else -> variable
+            }
+        }.orEmpty()
+        return cataloguePage(prepareUrl(urlTemplate, query, page), "ruleSearch", form)
     }
 
     override suspend fun getLatestUpdates(page: Int) = MangasPage(emptyList(), false)
