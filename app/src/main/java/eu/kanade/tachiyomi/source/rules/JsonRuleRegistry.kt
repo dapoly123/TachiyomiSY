@@ -1,10 +1,16 @@
 package eu.kanade.tachiyomi.source.rules
 
 import android.content.Context
+import eu.kanade.tachiyomi.network.NetworkHelper
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.withContext
+import okhttp3.Request
 import org.json.JSONArray
 import org.json.JSONObject
+import uy.kohesive.injekt.Injekt
+import uy.kohesive.injekt.api.get
 
 /**
  * App-owned, declarative source definitions. No APK, reflection or rule JavaScript is executed.
@@ -20,12 +26,17 @@ class JsonRuleRegistry private constructor(context: Context) {
     private val prefs = context.applicationContext.getSharedPreferences("json_rule_sources_v1", Context.MODE_PRIVATE)
     private val state = MutableStateFlow(read())
     val rules = state.asStateFlow()
+    private val subscriptionState = MutableStateFlow(
+        prefs.getStringSet("subscriptions", emptySet()).orEmpty().sorted(),
+    )
+    val subscriptions = subscriptionState.asStateFlow()
 
     private fun read(): List<JSONObject> = runCatching {
         val json = JSONArray(prefs.getString("rules", "[]") ?: "[]")
         (0 until json.length()).map { json.getJSONObject(it) }
     }.getOrDefault(emptyList())
 
+    @Synchronized
     fun importJson(text: String): Int {
         require(text.length <= 2_000_000) { "JSON file too large (2 MB maximum)" }
         val trimmed = text.trim()
@@ -57,9 +68,57 @@ class JsonRuleRegistry private constructor(context: Context) {
         return validated.size
     }
 
+    suspend fun importSubscription(address: String): Int {
+        val uri = android.net.Uri.parse(address.trim())
+        require(uri.scheme == "https" && !uri.host.isNullOrBlank()) {
+            "Subscriptions must use HTTPS"
+        }
+        val content = withContext(Dispatchers.IO) {
+            val request = Request.Builder().url(address.trim()).get().build()
+            Injekt.get<NetworkHelper>().client.newCall(request).execute().use { response ->
+                check(response.isSuccessful) { "Subscription HTTP ${response.code}" }
+                val reader = response.body?.charStream() ?: error("Empty subscription")
+                reader.use {
+                    val buffer = CharArray(8192)
+                    val output = StringBuilder()
+                    while (true) {
+                        val size = it.read(buffer)
+                        if (size == -1) break
+                        output.append(buffer, 0, size)
+                        require(output.length <= 2_000_000) { "Subscription exceeds 2 MB" }
+                    }
+                    output.toString()
+                }
+            }
+        }
+        val count = importJson(content)
+        synchronized(this) {
+            val urls = (subscriptionState.value + address.trim()).distinct().sorted()
+            check(prefs.edit().putStringSet("subscriptions", urls.toSet()).commit())
+            subscriptionState.value = urls
+        }
+        return count
+    }
+
+    suspend fun refreshSubscriptions(): Map<String, Result<Int>> {
+        val result = linkedMapOf<String, Result<Int>>()
+        for (subscription in subscriptionState.value) {
+            result[subscription] = runCatching { importSubscription(subscription) }
+        }
+        return result
+    }
+
+    @Synchronized
+    fun removeSubscription(address: String) {
+        val urls = subscriptionState.value.filterNot { it == address.trim() }
+        check(prefs.edit().putStringSet("subscriptions", urls.toSet()).commit())
+        subscriptionState.value = urls
+    }
+
     private fun key(rule: JSONObject): String =
         rule.optString("bookSourceUrl").ifBlank { rule.optString("baseUrl") }.trimEnd('/')
 
+    @Synchronized
     fun remove(url: String) {
         val entries = read().filterNot { key(it) == url.trimEnd('/') }
         val arr = JSONArray()
