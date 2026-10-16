@@ -11,8 +11,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.Headers
 import okhttp3.Request
-import org.json.JSONObject
 import org.json.JSONArray
+import org.json.JSONObject
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
@@ -245,14 +245,24 @@ class JsonRuleSource(private val rule: JSONObject) : HttpSource() {
             }
             updated.initialized = true
         }
-        val parsedChapters = if (!fetchChapters) chapters else {
+        val parsedChapters = if (!fetchChapters) {
+            chapters
+        } else {
             val listRule = field("ruleChapterList")
-            if (listRule.isBlank()) emptyList() else select(doc, listRule).mapNotNull { node ->
-                val title = value(node, field("ruleChapterName").ifBlank { "a@text" })
-                val address = value(node, field("ruleChapterUrl").ifBlank { "a@href" })
-                if (title.isBlank() || address.isBlank()) null else SChapter.create().apply {
-                    name = title
-                    url = resolveUrl(address, doc.location())
+            if (listRule.isBlank()) {
+                emptyList()
+            } else {
+                select(doc, listRule).mapNotNull { node ->
+                    val title = value(node, field("ruleChapterName").ifBlank { "a@text" })
+                    val address = value(node, field("ruleChapterUrl").ifBlank { "a@href" })
+                    if (title.isBlank() || address.isBlank()) {
+                        null
+                    } else {
+                        SChapter.create().apply {
+                            name = title
+                            url = resolveUrl(address, doc.location())
+                        }
+                    }
                 }
             }
         }
