@@ -1,6 +1,7 @@
 package eu.kanade.tachiyomi.source.rules
 
 import android.content.Context
+import eu.kanade.domain.source.service.SourcePreferences
 import eu.kanade.tachiyomi.network.NetworkHelper
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -64,6 +65,16 @@ class JsonRuleRegistry private constructor(context: Context) {
         val arr = JSONArray()
         current.values.forEach { arr.put(it) }
         check(prefs.edit().putString("rules", arr.toString()).commit()) { "Failed to persist rules" }
+        // A manually imported source should immediately be visible in Browse / Sources.
+        // Newly imported languages otherwise remain hidden by the global language filter.
+        val sourcePreferences = Injekt.get<SourcePreferences>()
+        val currentLanguages = sourcePreferences.enabledLanguages.get()
+        val importedLanguages = validated.map {
+            it.optString("bookSourceLanguage").ifBlank { "zh" }
+        }.toSet()
+        if (!currentLanguages.containsAll(importedLanguages)) {
+            sourcePreferences.enabledLanguages.set(currentLanguages + importedLanguages)
+        }
         state.value = current.values.toList()
         return validated.size
     }
