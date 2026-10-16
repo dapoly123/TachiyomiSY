@@ -1,0 +1,15 @@
+{
+  "bookSourceName": "如漫画（代理测试）",
+  "bookSourceUrl": "http://rumanhua2.com",
+  "bookSourceLanguage": "zh",
+  "ruleSearchUrl": "http://rumanhua2.com/s@k=searchKey",
+  "ruleSearchList": "$.data[*]",
+  "ruleSearchName": ".name",
+  "ruleSearchNoteUrl": "http://rumanhua2.com/{{$.id}}/",
+  "ruleSearchCoverUrl": ".imgurl",
+  "ruleBookName": "meta[property=og:title]@content",
+  "ruleBookIntro": "meta[property=og:description]@content",
+  "ruleChapterList": ".chaplist-box ul li",
+  "ruleChapterName": "a@text",
+  "ruleChapterUrl": "a@href"
+}

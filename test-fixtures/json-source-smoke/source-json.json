@@ -1,0 +1,15 @@
+{
+  "bookSourceName": "JSONPath Source Smoke Fixture",
+  "bookSourceUrl": "http://10.0.2.2:18765",
+  "ruleSearchUrl": "http://10.0.2.2:18765/json/search?q={{key}}",
+  "ruleSearchList": "$.data.data||$.data",
+  "ruleSearchName": "$.comic_name",
+  "ruleSearchNoteUrl": "http://10.0.2.2:18765/json/comic/{{$.comic_id}}",
+  "ruleSearchCoverUrl": "$.cover",
+  "ruleBookName": "$.data.title",
+  "ruleBookIntro": "$.data.description",
+  "ruleChapterList": "$.data.chapters[*]",
+  "ruleChapterName": "$.name",
+  "ruleChapterUrl": "http://10.0.2.2:18765/json/chapter/{{$.id}}",
+  "ruleBookContent": "$.data.images[*].url"
+}

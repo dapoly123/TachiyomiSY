@@ -29,7 +29,9 @@ android {
     namespace = "eu.kanade.tachiyomi"
 
     defaultConfig {
-        applicationId = "eu.kanade.tachiyomi.sy"
+        // Independent install: do not replace a user's existing TachiyomiSY.
+        // The debug variant additionally appends ".debug".
+        applicationId = "com.tachiyomisy.jsonrules"
 
         versionCode = 81
         versionName = "1.13.2"
@@ -294,6 +296,8 @@ dependencies {
 
     // Tests
     testImplementation(libs.bundles.test)
+    // JVM unit tests need a real org.json implementation, not Android SDK's stubs.
+    testImplementation("org.json:json:20240303")
     testRuntimeOnly(libs.junit.platform.launcher)
 
     // For detecting memory leaks; see https://square.github.io/leakcanary/
@@ -325,6 +329,12 @@ dependencies {
 
     // ZXing Android Embedded
     implementation(sylibs.zxing.android.embedded)
+}
+
+// Avoid HTTPS license lookups during local/offline builds.
+// AboutLibraries otherwise fetches SPDX texts despite Gradle --offline.
+aboutLibraries {
+    offlineMode = true
 }
 
 androidComponents {
