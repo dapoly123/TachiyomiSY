@@ -29,7 +29,9 @@ android {
     namespace = "eu.kanade.tachiyomi"
 
     defaultConfig {
-        applicationId = "eu.kanade.tachiyomi.sy"
+        // Independent install: do not replace a user's existing TachiyomiSY.
+        // The debug variant additionally appends ".debug".
+        applicationId = "com.tachiyomisy.jsonrules"
 
         versionCode = 81
         versionName = "1.13.2"
