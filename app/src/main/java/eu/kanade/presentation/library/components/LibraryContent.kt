@@ -53,6 +53,9 @@ fun LibraryContent(
             end = contentPadding.calculateEndPadding(LocalLayoutDirection.current),
         ),
     ) {
+        // The category stream may briefly be empty while restoring an existing library.
+        // Creating a pager with currentPage.coerceIn(0, -1) crashes the activity.
+        if (categories.isEmpty()) return@Column
         val coercedCurrentPage = remember(categories, currentPage) { currentPage.coerceIn(0, categories.lastIndex) }
         // SY <--
         val pagerState = rememberPagerState(coercedCurrentPage) { categories.size }
