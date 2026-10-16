@@ -10,7 +10,13 @@ import org.json.JSONObject
  * App-owned, declarative source definitions. No APK, reflection or rule JavaScript is executed.
  * A rule is loaded from persistent storage when the application starts.
  */
-class JsonRuleRegistry(context: Context) {
+class JsonRuleRegistry private constructor(context: Context) {
+    companion object {
+        @Volatile private var instance: JsonRuleRegistry? = null
+        fun get(context: Context): JsonRuleRegistry = instance ?: synchronized(this) {
+            instance ?: JsonRuleRegistry(context.applicationContext).also { instance = it }
+        }
+    }
     private val prefs = context.applicationContext.getSharedPreferences("json_rule_sources_v1", Context.MODE_PRIVATE)
     private val state = MutableStateFlow(read())
     val rules = state.asStateFlow()
