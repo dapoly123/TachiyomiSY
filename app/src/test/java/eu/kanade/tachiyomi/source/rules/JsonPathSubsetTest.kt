@@ -35,7 +35,9 @@ class JsonPathSubsetTest {
     fun `interpolate manga details URL`() {
         val record = JSONObject("""{"comic_id":5,"comic_name":"Sample"}""")
         assertEquals("https://example.org/comic/5", JsonPathSubset.interpolate(record, "https://example.org/comic/{{$.comic_id}}"))
+        assertEquals("https://example.org/comic/5", JsonPathSubset.interpolate(record, "https://example.org/comic/{$.comic_id}"))
         assertEquals("Sample", JsonPathSubset.text(record, "$.comic_name"))
+        assertEquals("Sample", JsonPathSubset.text(record, ".comic_name"))
     }
 
     @Test
