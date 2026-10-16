@@ -1,0 +1,15 @@
+{
+  "bookSourceName": "JSON Source Local Smoke Fixture",
+  "bookSourceUrl": "http://10.0.2.2:18765",
+  "ruleSearchUrl": "http://10.0.2.2:18765/search?q={{key}}&page={{page}}",
+  "ruleSearchList": "article.entry",
+  "ruleSearchName": "h2@text",
+  "ruleSearchNoteUrl": "a@href",
+  "ruleSearchCoverUrl": "img@data-src",
+  "ruleBookName": "h1@text",
+  "ruleBookIntro": "p.description@text",
+  "ruleChapterList": "ul.chapters li",
+  "ruleChapterName": "a@text",
+  "ruleChapterUrl": "a@href",
+  "ruleBookContent": "img.page@src"
+}
