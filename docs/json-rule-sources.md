@@ -6,6 +6,10 @@ Open **Browse → Sources → Import JSON sources** and choose a UTF-8 JSON file
 
 Alternatively choose **Subscribe to JSON rule URL** and enter an HTTP(S) URL serving a JSON rule or rule array. HTTPS is recommended for subscriptions; HTTP should only be used for trusted local services. URLs are remembered and can be refreshed from **Manage imported JSON sources**. Individual imported rules can also be removed from that screen without uninstalling anything.
 
+**PipiMiao support:** Select **Import PipiMiao share link** and paste a `ppcat://ruleLink?data=...` link. The built-in decoder reconstructs its rearranged ZIP/DEFLATE `.mh_rules` JSON payload and validates the CRC. The ordinary **Import JSON sources** file picker also accepts a UTF-8 JSON backup array with `[{"name":"...","url":"ppcat://ruleLink?data=..."}]` entries. These import without installing source APKs.
+
+Decoded rules then pass through the same declarative rules engine as native JSON. Successfully decoding a source is **not** a guarantee that its website rules (especially `@js:`, JSONPath, XPath, encrypted requests, or dynamic URLs) are supported. A tutorial-only source with `about:blank` is rejected intentionally.
+
 The import is persisted in app-local preferences and the source list refreshes without restarting. Existing APK-based extensions continue to work. Reimporting the same `bookSourceUrl` replaces that rule.
 
 ## Supported subset
@@ -43,7 +47,7 @@ Example:
 - Importing a rule registers a source but does not guarantee the underlying website is reachable.
 - The initial tutorial-only PipiMiao rule with `bookSourceUrl: about:blank` is intentionally rejected because it is not a manga website.
 - Import size capped at 2MB, 200 rules per file, 500 installed rules.
-- Binary/encoded `ppcat://ruleLink` imports are not supported. Decode to JSON first.
+- PipiMiao direct links and JSON backups are decoded; incompatible website-rule expressions remain unsupported.
 - There is currently no automatic interval-based refresh of subscriptions, only manual refresh.
 - No built-in pagination detection yet (each query returns the current page).
 - Treat imported rules as untrusted network configuration, especially if they target private/local addresses. No imported JavaScript is executed.
