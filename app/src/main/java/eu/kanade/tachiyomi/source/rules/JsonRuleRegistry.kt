@@ -81,8 +81,8 @@ class JsonRuleRegistry private constructor(context: Context) {
 
     suspend fun importSubscription(address: String): Int {
         val uri = android.net.Uri.parse(address.trim())
-        require(uri.scheme == "https" && !uri.host.isNullOrBlank()) {
-            "Subscriptions must use HTTPS"
+        require(uri.scheme in setOf("https", "http") && !uri.host.isNullOrBlank()) {
+            "Subscriptions must use HTTP or HTTPS"
         }
         val content = withContext(Dispatchers.IO) {
             val request = Request.Builder().url(address.trim()).get().build()
