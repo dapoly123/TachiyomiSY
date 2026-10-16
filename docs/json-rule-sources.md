@@ -4,7 +4,7 @@ This fork can import standalone JSON source definitions without installing an AP
 
 Open **Browse → Sources → Import JSON sources** and choose a UTF-8 JSON file. Multiple rules can be imported as a JSON array or an object containing `sources` / `rules`.
 
-Alternatively choose **Subscribe to JSON rule URL** and enter an HTTPS URL serving a JSON rule or rule array. URLs are remembered and can be refreshed from **Manage imported JSON sources**. Individual imported rules can also be removed from that screen without uninstalling anything.
+Alternatively choose **Subscribe to JSON rule URL** and enter an HTTP(S) URL serving a JSON rule or rule array. HTTPS is recommended for subscriptions; HTTP should only be used for trusted local services. URLs are remembered and can be refreshed from **Manage imported JSON sources**. Individual imported rules can also be removed from that screen without uninstalling anything.
 
 The import is persisted in app-local preferences and the source list refreshes without restarting. Existing APK-based extensions continue to work. Reimporting the same `bookSourceUrl` replaces that rule.
 
