@@ -116,11 +116,13 @@ class JsonRuleRegistry private constructor(context: Context) {
     }
 
     private fun key(rule: JSONObject): String =
-        rule.optString("bookSourceUrl").ifBlank { rule.optString("baseUrl") }.trimEnd('/')
+        rule.optString("bookSourceUrl").ifBlank { rule.optString("baseUrl") }.trimEnd('/') +
+            "|" + rule.optString("bookSourceName").ifBlank { rule.optString("name") } +
+            "|" + rule.optString("bookSourceLanguage").ifBlank { "zh" }
 
     @Synchronized
-    fun remove(url: String) {
-        val entries = read().filterNot { key(it) == url.trimEnd('/') }
+    fun remove(url: String, name: String, lang: String) {
+        val entries = read().filterNot { key(it) == url.trimEnd('/') + "|" + name + "|" + lang }
         val arr = JSONArray()
         entries.forEach { arr.put(it) }
         check(prefs.edit().putString("rules", arr.toString()).commit())
