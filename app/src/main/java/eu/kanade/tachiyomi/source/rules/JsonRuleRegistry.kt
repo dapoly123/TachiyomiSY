@@ -43,7 +43,9 @@ class JsonRuleRegistry private constructor(context: Context) {
         val trimmed = text.trim()
         val root = if (trimmed.startsWith("ppcat://ruleLink?", ignoreCase = true)) {
             JSONArray().put(PipiMiaoLinkDecoder.decode(trimmed))
-        } else if (trimmed.startsWith("[")) JSONArray(trimmed) else {
+        } else if (trimmed.startsWith("[")) {
+            JSONArray(trimmed)
+        } else {
             val obj = JSONObject(trimmed)
             when {
                 obj.optJSONArray("sources") != null -> obj.getJSONArray("sources")
