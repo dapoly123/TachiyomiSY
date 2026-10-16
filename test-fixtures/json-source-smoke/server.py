@@ -35,8 +35,14 @@ JSON_RULE = {
     "ruleSearchUrl": BASE + "/json/search?q={{key}}",
     "ruleSearchList": "$.data.data||$.data",
     "ruleSearchName": "$.comic_name",
-    "ruleSearchNoteUrl": BASE + "/comic/{{$.comic_id}}",
+    "ruleSearchNoteUrl": BASE + "/json/comic/{{$.comic_id}}",
     "ruleSearchCoverUrl": "$.cover",
+    "ruleBookName": "$.data.title",
+    "ruleBookIntro": "$.data.description",
+    "ruleChapterList": "$.data.chapters[*]",
+    "ruleChapterName": "$.name",
+    "ruleChapterUrl": BASE + "/json/chapter/{{$.id}}",
+    "ruleBookContent": "$.data.images[*].url",
 }
 LEGACY_RULE = {
     **RULE,
@@ -64,6 +70,24 @@ class Handler(BaseHTTPRequestHandler):
                     "comic_id": 1,
                     "cover": "/images/cover.png",
                 }]},
+            }).encode(), "application/json")
+        if route.path == "/json/comic/1":
+            return self.reply(json.dumps({
+                "data": {
+                    "title": "JSON API Manga",
+                    "description": "JSON API detail and chapter fixture",
+                    "chapters": [
+                        {"id": 1, "name": "JSON Chapter One"},
+                        {"id": 2, "name": "JSON Chapter Two"},
+                    ],
+                },
+            }).encode(), "application/json")
+        if route.path in {"/json/chapter/1", "/json/chapter/2"}:
+            return self.reply(json.dumps({
+                "data": {"images": [
+                    {"url": "/images/json-page-1.png"},
+                    {"url": "/images/json-page-2.png"},
+                ]},
             }).encode(), "application/json")
         if route.path == "/search":
             query = parse_qs(route.query).get("q", ["sample"])[0]
