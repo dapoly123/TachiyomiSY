@@ -62,8 +62,8 @@ internal object JsonPathSubset {
         if (expression.isBlank()) return ""
         val clean = expression.substringBefore("@put:").trim()
         require(!clean.contains("@js:", ignoreCase = true)) { "JavaScript transforms are not supported" }
-        if (clean.startsWith("$") || clean.startsWith("-$")) {
-            return select(node, clean).firstOrNull()?.toString().orEmpty()
+        if (clean.startsWith("$") || clean.startsWith("-$") || clean.startsWith(".")) {
+            return select(node, if (clean.startsWith(".")) "$" + clean else clean).firstOrNull()?.toString().orEmpty()
         }
         return interpolate(node, clean)
     }
