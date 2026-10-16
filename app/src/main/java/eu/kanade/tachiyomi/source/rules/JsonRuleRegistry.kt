@@ -41,7 +41,9 @@ class JsonRuleRegistry private constructor(context: Context) {
     fun importJson(text: String): Int {
         require(text.length <= 2_000_000) { "JSON file too large (2 MB maximum)" }
         val trimmed = text.trim()
-        val root = if (trimmed.startsWith("[")) JSONArray(trimmed) else {
+        val root = if (trimmed.startsWith("ppcat://ruleLink?", ignoreCase = true)) {
+            JSONArray().put(PipiMiaoLinkDecoder.decode(trimmed))
+        } else if (trimmed.startsWith("[")) JSONArray(trimmed) else {
             val obj = JSONObject(trimmed)
             when {
                 obj.optJSONArray("sources") != null -> obj.getJSONArray("sources")
@@ -51,7 +53,12 @@ class JsonRuleRegistry private constructor(context: Context) {
         }
         require(root.length() <= 200) { "Maximum 200 rules per import" }
         val validated = (0 until root.length()).map { index ->
-            val obj = root.getJSONObject(index)
+            val input = root.getJSONObject(index)
+            val obj = if (input.optString("url").startsWith("ppcat://ruleLink?", ignoreCase = true)) {
+                PipiMiaoLinkDecoder.decode(input.getString("url"))
+            } else {
+                input
+            }
             val name = obj.optString("bookSourceName").ifBlank { obj.optString("name") }
             val url = obj.optString("bookSourceUrl").ifBlank { obj.optString("baseUrl") }
             require(name.isNotBlank() && name.length <= 120) { "Invalid source name at index $index" }
