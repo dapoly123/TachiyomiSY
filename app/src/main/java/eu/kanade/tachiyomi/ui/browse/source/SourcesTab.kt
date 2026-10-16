@@ -1,9 +1,15 @@
 package eu.kanade.tachiyomi.ui.browse.source
 
+import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.FileOpen
 import androidx.compose.material.icons.outlined.FilterList
 import androidx.compose.material.icons.outlined.TravelExplore
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -17,12 +23,15 @@ import eu.kanade.presentation.browse.SourceOptionsDialog
 import eu.kanade.presentation.browse.SourcesScreen
 import eu.kanade.presentation.components.AppBar
 import eu.kanade.presentation.components.TabContent
+import eu.kanade.tachiyomi.source.rules.JsonRuleRegistry
 import eu.kanade.tachiyomi.ui.browse.source.SourcesScreen.SmartSearchConfig
 import eu.kanade.tachiyomi.ui.browse.source.browse.BrowseSourceScreen
 import eu.kanade.tachiyomi.ui.browse.source.browse.BrowseSourceViewModel.Listing
 import eu.kanade.tachiyomi.ui.browse.source.feed.SourceFeedScreen
 import eu.kanade.tachiyomi.ui.browse.source.globalsearch.GlobalSearchScreen
 import exh.ui.smartsearch.SmartSearchScreen
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import tachiyomi.i18n.MR
@@ -34,6 +43,33 @@ fun Screen.sourcesTab(
     smartSearchConfig: SmartSearchConfig? = null,
 ): TabContent {
     val navigator = LocalNavigator.currentOrThrow
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val importLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) {
+            scope.launch {
+                val result = runCatching {
+                    val text = withContext(Dispatchers.IO) {
+                        context.contentResolver.openInputStream(uri)?.bufferedReader()?.use { reader ->
+                            val data = CharArray(2_000_001)
+                            val count = reader.read(data)
+                            require(count in 1..2_000_000) { "Invalid or oversized JSON" }
+                            String(data, 0, count)
+                        } ?: error("Could not open JSON document")
+                    }
+                    JsonRuleRegistry.get(context).importJson(text)
+                }
+                Toast.makeText(
+                    context,
+                    result.fold(
+                        onSuccess = { "Imported $it JSON sources" },
+                        onFailure = { "Import failed: ${it.message}" },
+                    ),
+                    Toast.LENGTH_LONG,
+                ).show()
+            }
+        }
+    }
     // SY -->
     val viewModel = viewModel<SourcesViewModel>(
         factory = SourcesViewModel.Factory,
@@ -51,6 +87,11 @@ fun Screen.sourcesTab(
             false -> SYMR.strings.find_in_another_source
         },
         actions = listOf(
+            AppBar.Action(
+                title = "Import JSON sources",
+                icon = Icons.Outlined.FileOpen,
+                onClick = { importLauncher.launch(arrayOf("application/json", "text/plain", "*/*")) },
+            ),
             AppBar.Action(
                 title = stringResource(MR.strings.action_global_search),
                 icon = Icons.Outlined.TravelExplore,
