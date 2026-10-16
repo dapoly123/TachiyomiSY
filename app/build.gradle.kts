@@ -327,6 +327,12 @@ dependencies {
     implementation(sylibs.zxing.android.embedded)
 }
 
+// Avoid HTTPS license lookups during local/offline builds.
+// AboutLibraries otherwise fetches SPDX texts despite Gradle --offline.
+aboutLibraries {
+    offlineMode = true
+}
+
 androidComponents {
     onVariants { variant ->
         val resSource = variant.sources.res ?: return@onVariants
