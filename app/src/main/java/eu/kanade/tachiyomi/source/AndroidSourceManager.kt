@@ -4,6 +4,8 @@ import android.content.Context
 import eu.kanade.domain.source.service.SourcePreferences
 import eu.kanade.tachiyomi.data.download.DownloadManager
 import eu.kanade.tachiyomi.extension.ExtensionManager
+import eu.kanade.tachiyomi.source.rules.JsonRuleRegistry
+import eu.kanade.tachiyomi.source.rules.JsonRuleSource
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.source.online.all.EHentai
 import eu.kanade.tachiyomi.source.online.all.Lanraragi
@@ -67,6 +69,8 @@ class AndroidSourceManager(
 
     private val stubSourcesMap = ConcurrentHashMap<Long, StubSource>()
 
+    private val jsonRuleRegistry = JsonRuleRegistry.get(context)
+
     override val sources: Flow<List<Source>> = sourcesMapFlow.map { it.values.toList() }
 
     // SY -->
@@ -79,12 +83,13 @@ class AndroidSourceManager(
             extensionManager.isInitialized.first { it }
 
             extensionManager.installedExtensionsFlow
+                .combine(jsonRuleRegistry.rules) { extensions, rules -> extensions to rules }
                 // SY -->
-                .combine(exhPreferences.enableExhentai.changes()) { extensions, enableExhentai ->
-                    extensions to enableExhentai
+                .combine(exhPreferences.enableExhentai.changes()) { (extensions, rules), enableExhentai ->
+                    Triple(extensions, rules, enableExhentai)
                 }
                 // SY <--
-                .collectLatest { (extensions, enableExhentai) ->
+                .collectLatest { (extensions, rules, enableExhentai) ->
                     val mutableMap: ConcurrentHashMap<Long, Source> = ConcurrentHashMap<Long, Source>(
                         mapOf(
                             LocalSource.ID to LocalSource(
@@ -112,6 +117,14 @@ class AndroidSourceManager(
                         extension.sources.mapNotNull { it.toInternalSource() }.forEach {
                             mutableMap[it.id] = it
                             registerStubSource(StubSource.from(it))
+                        }
+                    }
+                    rules.forEach { rule ->
+                        val source = JsonRuleSource(rule)
+                        // Imported rules must never override existing built-in or APK sources.
+                        if (!mutableMap.containsKey(source.id)) {
+                            mutableMap[source.id] = source
+                            registerStubSource(StubSource.from(source))
                         }
                     }
                     sourcesMapFlow.value = mutableMap
