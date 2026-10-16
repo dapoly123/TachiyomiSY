@@ -12,6 +12,7 @@ import kotlinx.coroutines.withContext
 import okhttp3.Headers
 import okhttp3.Request
 import org.json.JSONObject
+import org.json.JSONArray
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
@@ -62,41 +63,69 @@ class JsonRuleSource(private val rule: JSONObject) : HttpSource() {
     override fun getMangaUrl(manga: SManga): String = resolveUrl(manga.url)
     override fun getChapterUrl(chapter: SChapter): String = resolveUrl(chapter.url)
 
-    private suspend fun document(address: String): Document = withContext(Dispatchers.IO) {
+    private suspend fun fetch(address: String): Pair<String, String> = withContext(Dispatchers.IO) {
         client.newCall(Request.Builder().url(resolveUrl(address)).headers(headers).build()).execute().use { response ->
             check(response.isSuccessful) { "HTTP ${response.code}: ${response.request.url}" }
             val body = response.body?.string() ?: error("Empty document response")
-            Jsoup.parse(body, response.request.url.toString())
+            body to response.request.url.toString()
         }
     }
 
-    /** selector@attribute, selector@text, or bare text/href/src shorthand. */
-    private fun select(root: Element, expression: String): List<Element> {
-        require(!expression.contains("@js:", ignoreCase = true)) { "JavaScript rule unsupported" }
-        require(!expression.startsWith("json:", ignoreCase = true)) { "JSONPath rule unsupported" }
-        require(!expression.startsWith("xpath:", ignoreCase = true)) { "XPath rule unsupported" }
-        val css = expression.substringBefore('@').trim()
-        return if (css.isBlank() || css in setOf("text", "html", "href", "src")) {
-            listOf(root)
-        } else {
-            root.select(css)
+    private suspend fun document(address: String): Document {
+        val (body, finalUrl) = fetch(address)
+        return Jsoup.parse(body, finalUrl)
+    }
+
+    private val attributes = setOf("text", "html", "href", "src", "style", "title", "data-src", "data-original", "srcset")
+
+    /** Supports plain CSS plus PipiMiao's class.foo@tag.ul@tag.li shorthand. */
+    private fun selectorAndAttribute(expression: String): Pair<String, String> {
+        require(!expression.contains("@js:", ignoreCase = true) && !expression.contains("<js>", ignoreCase = true)) {
+            "JavaScript rules are unsupported"
         }
+        require(!expression.startsWith("$") && !expression.startsWith("-$")) {
+            "JSONPath rules must use JSON mode"
+        }
+        val pieces = expression.substringBefore("##").trim().split('@')
+        val attribute = pieces.last().takeIf { it in attributes } ?: "text"
+        val steps = if (pieces.last() == attribute && pieces.size > 1) pieces.dropLast(1) else pieces
+        val selector = steps.joinToString(" ") { step ->
+            val t = step.trim()
+            when {
+                t.startsWith("tag.") -> t.removePrefix("tag.").replace(Regex("\\.(\\d+)$")) { match ->
+                    ":eq(${match.groupValues[1]})"
+                }
+                t.startsWith("class.") -> "." + t.removePrefix("class.")
+                t in attributes -> ""
+                else -> t
+            }
+        }.trim()
+        return selector to attribute
+    }
+
+    private fun select(root: Element, expression: String): List<Element> {
+        for (alternative in expression.split("||")) {
+            val (selector, _) = selectorAndAttribute(alternative)
+            val found = if (selector.isBlank()) listOf(root) else root.select(selector)
+            if (found.isNotEmpty()) return found
+        }
+        return emptyList()
     }
 
     private fun value(root: Element, expression: String): String {
         if (expression.isBlank()) return ""
-        val node = select(root, expression).firstOrNull() ?: return ""
-        val attr = if ('@' in expression) {
-            expression.substringAfterLast('@').trim()
-        } else {
-            expression.takeIf { it in setOf("text", "html", "href", "src") } ?: "text"
+        for (alternative in expression.split("||")) {
+            val (selector, attr) = selectorAndAttribute(alternative)
+            val node = (if (selector.isBlank()) listOf(root) else root.select(selector)).firstOrNull() ?: continue
+            val output = when (attr) {
+                "text" -> node.text()
+                "html" -> node.html()
+                "href", "src" -> node.absUrl(attr).ifBlank { node.attr(attr) }
+                else -> node.attr(attr)
+            }.trim()
+            if (output.isNotBlank()) return output
         }
-        return when (attr) {
-            "", "text" -> node.text()
-            "html" -> node.html()
-            "href", "src" -> node.absUrl(attr).ifBlank { node.attr(attr) }
-            else -> node.attr(attr)
-        }.trim()
+        return ""
     }
 
     private fun photoUrl(node: Element, attribute: String): String {
@@ -126,19 +155,63 @@ class JsonRuleSource(private val rule: JSONObject) : HttpSource() {
         }
     }
 
+    private fun jsonList(body: String, sourceUrl: String, prefix: String): List<SManga> {
+        val listRule = field(prefix + "List")
+        val root = JsonPathSubset.decode(body)
+        val records = JsonPathSubset.select(root, listRule).flatMap { node ->
+            if (node is JSONArray) {
+                (0 until node.length()).mapNotNull { node.opt(it) }
+            } else {
+                listOf(node)
+            }
+        }
+        return records.mapNotNull { item ->
+            val title = JsonPathSubset.text(item, field(prefix + "Name"))
+            val link = JsonPathSubset.text(item, field(prefix + "NoteUrl"))
+            if (title.isBlank() || link.isBlank()) return@mapNotNull null
+            SManga.create().apply {
+                this.title = title
+                this.url = resolveUrl(link, sourceUrl)
+                val coverRule = field(prefix + "CoverUrl")
+                thumbnail_url = if (coverRule.contains("@js:", ignoreCase = true)) {
+                    null // JS transforms are not executed; preserve search results without a cover.
+                } else {
+                    JsonPathSubset.text(item, coverRule).takeIf { it.isNotBlank() }
+                        ?.let { resolveUrl(it, sourceUrl) }
+                }
+            }
+        }
+    }
+
+    private suspend fun cataloguePage(address: String, prefix: String): MangasPage {
+        val listRule = field(prefix + "List").trim()
+        val jsonMode = listRule.startsWith("$") || listRule.startsWith("-$")
+        val items = if (jsonMode) {
+            val (body, finalUrl) = fetch(address)
+            jsonList(body, finalUrl, prefix)
+        } else {
+            list(document(address), prefix)
+        }
+        return MangasPage(items, false)
+    }
+
     override suspend fun getPopularManga(page: Int): MangasPage {
         val template = field("ruleFindUrl")
         if (template.isBlank()) return MangasPage(emptyList(), false)
-        return MangasPage(list(document(prepareUrl(template, "", page)), "ruleFind"), false)
+        return cataloguePage(prepareUrl(template, "", page), "ruleFind")
     }
 
     private fun prepareUrl(template: String, query: String, page: Int): String {
         val encoded = URLEncoder.encode(query, "UTF-8")
+        val first = template.lineSequence().firstOrNull { it.isNotBlank() }.orEmpty()
+        require(!first.contains("@js:", ignoreCase = true)) { "Script-generated URLs are unsupported" }
         return resolveUrl(
-            template.substringAfter("::", template)
+            first.substringAfter("::", first)
                 .replace("{{key}}", encoded)
                 .replace("{{searchKey}}", encoded)
                 .replace("{{keyword}}", encoded)
+                .replace("{{page-1}}", (page - 1).toString())
+                .replace("{{page+1}}", (page + 1).toString())
                 .replace("{{page}}", page.toString())
                 .replace("{page}", page.toString()),
         )
@@ -147,7 +220,7 @@ class JsonRuleSource(private val rule: JSONObject) : HttpSource() {
     override suspend fun getSearchManga(page: Int, query: String, filters: FilterList): MangasPage {
         val template = field("ruleSearchUrl")
         require(template.isNotBlank()) { "Source has no ruleSearchUrl" }
-        return MangasPage(list(document(prepareUrl(template, query, page)), "ruleSearch"), false)
+        return cataloguePage(prepareUrl(template, query, page), "ruleSearch")
     }
 
     override suspend fun getLatestUpdates(page: Int) = MangasPage(emptyList(), false)
