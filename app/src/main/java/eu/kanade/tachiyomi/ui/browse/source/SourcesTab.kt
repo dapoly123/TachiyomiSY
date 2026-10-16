@@ -6,7 +6,19 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.FileOpen
 import androidx.compose.material.icons.outlined.FilterList
+import androidx.compose.material.icons.outlined.ListAlt
 import androidx.compose.material.icons.outlined.TravelExplore
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.platform.LocalContext
@@ -45,19 +57,28 @@ fun Screen.sourcesTab(
     val navigator = LocalNavigator.currentOrThrow
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val ruleRegistry = remember(context) { JsonRuleRegistry.get(context) }
+    val installedRules by ruleRegistry.rules.collectAsStateWithLifecycle()
+    var manageRules by remember { mutableStateOf(false) }
     val importLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) {
             scope.launch {
                 val result = runCatching {
                     val text = withContext(Dispatchers.IO) {
                         context.contentResolver.openInputStream(uri)?.bufferedReader()?.use { reader ->
-                            val data = CharArray(2_000_001)
-                            val count = reader.read(data)
-                            require(count in 1..2_000_000) { "Invalid or oversized JSON" }
-                            String(data, 0, count)
+                            val output = StringBuilder()
+                            val data = CharArray(8192)
+                            while (true) {
+                                val count = reader.read(data)
+                                if (count == -1) break
+                                output.append(data, 0, count)
+                                require(output.length <= 2_000_000) { "JSON exceeds 2 MB" }
+                            }
+                            require(output.isNotEmpty()) { "Empty JSON file" }
+                            output.toString()
                         } ?: error("Could not open JSON document")
                     }
-                    JsonRuleRegistry.get(context).importJson(text)
+                    ruleRegistry.importJson(text)
                 }
                 Toast.makeText(
                     context,
@@ -93,6 +114,11 @@ fun Screen.sourcesTab(
                 onClick = { importLauncher.launch(arrayOf("application/json", "text/plain", "*/*")) },
             ),
             AppBar.Action(
+                title = "Manage imported JSON sources",
+                icon = Icons.Outlined.ListAlt,
+                onClick = { manageRules = true },
+            ),
+            AppBar.Action(
                 title = stringResource(MR.strings.action_global_search),
                 icon = Icons.Outlined.TravelExplore,
                 onClick = { navigator.push(GlobalSearchScreen(smartSearchConfig?.origTitle ?: "")) },
@@ -113,6 +139,39 @@ fun Screen.sourcesTab(
         },
         // SY <--
         content = { contentPadding, snackbarHostState ->
+            if (manageRules) {
+                AlertDialog(
+                    onDismissRequest = { manageRules = false },
+                    title = { Text("Imported JSON sources") },
+                    text = {
+                        if (installedRules.isEmpty()) {
+                            Text("No JSON sources imported yet.")
+                        } else {
+                            LazyColumn(modifier = Modifier.heightIn(max = 400.dp)) {
+                                items(installedRules) { rule ->
+                                    val sourceName = rule.optString("bookSourceName")
+                                        .ifBlank { rule.optString("name") }
+                                    val sourceUrl = rule.optString("bookSourceUrl")
+                                        .ifBlank { rule.optString("baseUrl") }
+                                    Text(sourceName)
+                                    TextButton(onClick = { ruleRegistry.remove(sourceUrl) }) {
+                                        Text("Remove")
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    confirmButton = {
+                        TextButton(onClick = {
+                            manageRules = false
+                            importLauncher.launch(arrayOf("application/json", "text/plain", "*/*"))
+                        }) { Text("Import JSON") }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { manageRules = false }) { Text("Close") }
+                    },
+                )
+            }
             SourcesScreen(
                 state = state,
                 contentPadding = contentPadding,
