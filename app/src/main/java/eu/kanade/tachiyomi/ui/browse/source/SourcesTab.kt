@@ -208,8 +208,9 @@ fun Screen.sourcesTab(
                                         .ifBlank { rule.optString("name") }
                                     val sourceUrl = rule.optString("bookSourceUrl")
                                         .ifBlank { rule.optString("baseUrl") }
+                                    val sourceLang = rule.optString("bookSourceLanguage").ifBlank { "zh" }
                                     Text(sourceName)
-                                    TextButton(onClick = { ruleRegistry.remove(sourceUrl) }) {
+                                    TextButton(onClick = { ruleRegistry.remove(sourceUrl, sourceName, sourceLang) }) {
                                         Text("Remove")
                                     }
                                 }
